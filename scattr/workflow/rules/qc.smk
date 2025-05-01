@@ -21,7 +21,7 @@ rule segment_qc:
         qc_labels=bids_labelmerge(
             space="T1w",
             datatype=None if not config.get("skip_labelmerge") else "anat",
-            desc="combined"
+            desc="combined2"
             if not config.get("skip_labelmerge")
             else config.get("labelmerge_base_desc"),
             suffix="dseg.nii.gz",

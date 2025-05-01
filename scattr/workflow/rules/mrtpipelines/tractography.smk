@@ -13,6 +13,12 @@ rule tckgen:
     params:
         step=config["step"],
         sl=config["sl_count"],
+        tmp_dir=lambda wildcards: bids_tractography_out(
+            root=os.environ.get("SLURM_TMPDIR")
+            if config.get("slurm_tmpdir")
+            else "/tmp",
+            **wildcards,
+        ),
     output:
         tck=bids_tractography_out(
             desc="iFOD2",
@@ -20,12 +26,6 @@ rule tckgen:
         ),
     threads: 32
     resources:
-        tmp_dir=lambda wildcards: bids_tractography_out(
-            root=os.environ.get("SLURM_TMPDIR")
-            if config.get("slurm_tmpdir")
-            else "/tmp",
-            **wildcards,
-        ),
         tmp_tck=lambda wildcards: bids_tractography_out(
             root=os.environ.get("SLURM_TMPDIR")
             if config.get("slurm_tmpdir")
@@ -42,7 +42,7 @@ rule tckgen:
         config["singularity"]["scattr"]
     shell:
         """
-        mkdir -p {resources.tmp_dir} 
+        mkdir -p {params.tmp_dir} 
 
         tckgen -nthreads {threads} -algorithm iFOD2 -step {params.step} \\
             -select {params.sl} -exclude {input.convex_hull} \\
@@ -167,8 +167,6 @@ checkpoint create_exclude_mask:
 
 
 # TODO (v0.2): ADD OPTION TO OUTPUT TDI MAP
-
-
 rule tck2connectome:
     """
     Smith, R. E.; Tournier, J.-D.; Calamante, F. & Connelly, A. The 
@@ -183,17 +181,6 @@ rule tck2connectome:
         subcortical_seg=rules.tckgen.input.subcortical_seg,
     params:
         radius=config["radial_search"],
-    output:
-        sl_assignment=bids_tractography_out(
-            desc="subcortical",
-            suffix="nodeAssignment.txt",
-        ),
-        node_weights=bids_tractography_out(
-            desc="subcortical",
-            suffix="nodeWeights.csv",
-        ),
-    threads: 32
-    resources:
         tmp_dir=lambda wildcards: bids_tractography_out(
             root=os.environ.get("SLURM_TMPDIR")
             if config.get("slurm_tmpdir")
@@ -216,6 +203,17 @@ rule tck2connectome:
             suffix="nodeWeights.csv",
             **wildcards,
         ),
+    output:
+        sl_assignment=bids_tractography_out(
+            desc="subcortical",
+            suffix="nodeAssignment.txt",
+        ),
+        node_weights=bids_tractography_out(
+            desc="subcortical",
+            suffix="nodeWeights.csv",
+        ),
+    threads: 32
+    resources:
         mem_mb=128000,
         time=60 * 3,
     log:
@@ -226,21 +224,20 @@ rule tck2connectome:
         config["singularity"]["scattr"]
     shell:
         """
-        mkdir -p {resources.tmp_dir}
+        mkdir -p {params.tmp_dir}
 
         tck2connectome -nthreads {threads} -zero_diagonal -stat_edge sum \\
         -assignment_radial_search {params.radius} \\
         -tck_weights_in {input.weights} \\
-        -out_assignments {resources.tmp_sl_assignment} \\
+        -out_assignments {params.tmp_sl_assignment} \\
         -symmetric {input.tck} {input.subcortical_seg} \\
-        {resources.tmp_node_weights} &> {log}
+        {params.tmp_node_weights} &> {log}
 
-        rsync {resources.tmp_sl_assignment} \\
+        rsync {params.tmp_sl_assignment} \\
         {output.sl_assignment} >> {log} 2>&1 
 
-        rsync {resources.tmp_node_weights} {output.node_weights} >> {log} 2>&1
+        rsync {params.tmp_node_weights} {output.node_weights} >> {log} 2>&1
         """
-
 
 checkpoint connectome2tck:
     input:
@@ -258,8 +255,7 @@ checkpoint connectome2tck:
                 ).parent
             )
         ),
-    threads: 32
-    resources:
+    params:
         tmp_dir=lambda wildcards: bids_tractography_out(
             root=os.environ.get("SLURM_TMPDIR")
             if config.get("slurm_tmpdir")
@@ -267,6 +263,8 @@ checkpoint connectome2tck:
             datatype="unfiltered",
             **wildcards,
         ),
+    threads: 32
+    resources:
         edge_weight_prefix=lambda wildcards: bids_tractography_out(
             root=os.environ.get("SLURM_TMPDIR")
             if config.get("slurm_tmpdir")
@@ -295,7 +293,7 @@ checkpoint connectome2tck:
         config["singularity"]["scattr"]
     shell:
         """
-        mkdir -p {resources.tmp_dir} {output.output_dir}
+        mkdir -p {params.tmp_dir} {output.output_dir}
 
         num_labels=$(cat {input.num_labels})
 

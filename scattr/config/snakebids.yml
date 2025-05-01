@@ -271,8 +271,14 @@ zona_bb_subcortex:
 freesurfer:
   tsv: "resources/freesurfer/desc-FreesurferThal_dseg.tsv"
 
+cerebellum:
+  tsv: "resources/cerebellum/atl-Anatom.tsv"
+  MNI152NLin6Asym:
+    seg: "resources/cerebellum/MNI152NLin6Asym/atl-Anatom_space-MNI_dseg.nii"
+    T1w: "resources/cerebellum/MNI152NLin6Asym/tpl-MNI152NLin6Asym_res-04_desc-brain_T1w.nii.gz"
+
 # Containers
 singularity:
-  scattr: "docker://khanlab/scattr:v0.3.2"
+  scattr: "/home/mliu366/scratch/1_in_progress/workflows/scattr_latest.sif"
 
-fs_license: /path/to/fs/license
+fs_license: /home/mliu366/projects/def-akhanf-ab/shared/.license

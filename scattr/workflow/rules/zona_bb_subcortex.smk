@@ -107,6 +107,7 @@ rule reg2native:
         echo {input.target}        
         export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS={threads}
 
+        echo "Computed output directory: {params.out_dir}"
         mkdir -p {params.out_dir}
 
         antsRegistrationSyNQuick.sh -n {threads} -d 3 \\
@@ -152,6 +153,101 @@ rule warp2native:
         -o {output.nii} &> {log}
         """
 
+# ====================================== cerebellum-specific ========================================
+
+""" References:
+Diedrichsen, J., Balsters, J. H., Flavell, J., Cussans, E., & Ramnani, N. (2009). 
+A probabilistic atlas of the human cerebellum. Neuroimage.
+
+Diedrichsen, J., Maderwald, S., Kuper, M., Thurling, M., Rabe, K., Gizewski, E. R., et al. (2011). 
+Imaging the deep cerebellar nuclei: A probabilistic atlas and normalization procedure. Neuroimage.
+
+http://www.diedrichsenlab.org/imaging/propatlas.htm
+https://github.com/DiedrichsenLab/cerebellar_atlases
+
+"""
+
+rule reg2native_cerebellum:
+    """
+    Create a transform from the Diedrichsen atlas space into subject-native space.
+    """
+    input:
+        template=lambda wc: str(
+            Path(workflow.basedir).parent
+            / config["cerebellum"][config["Space"]]["T1w"]
+        ),
+        target=lambda wc: inputs_t1w["T1w"].filter(**wc).expand()[0],
+    params:
+        out_dir  = directory(str(Path(bids_anat()).parent)),
+        out_prefix = bids_anat(desc="fromCerebellumToNative_"),
+    output:
+        warped_t1w = bids_anat(desc="fromCerebellumToNative", suffix="Warped.nii.gz"),
+        warp_mat   = bids_anat(desc="fromCerebellumToNative", suffix="1Warp.nii.gz"),
+        affine_mat = bids_anat(desc="fromCerebellumToNative", suffix="0GenericAffine.mat"),
+    threads:    4
+    resources:
+        mem_mb=16000, time=60
+    log:
+        bids_log(suffix="reg2native_cerebellum.log")
+    container:
+        config["singularity"]["scattr"]
+    shell:
+        """
+        antsRegistrationSyNQuick.sh -n {threads} -d 3 \
+            -f {input.target} -m {input.template} \
+            -o {params.out_prefix} &> {log}
+        """
+
+rule warp2native_cerebellum:
+    """
+    Warp the cerebellum atlas segmentation into subject-native space.
+    """
+    input:
+        seg = lambda wc: str(Path(workflow.basedir).parent
+            / config["cerebellum"][config["Space"]]["seg"]),
+        target = rules.reg2native_cerebellum.input.target,
+        warp   = rules.reg2native_cerebellum.output.warp_mat,
+        affine = rules.reg2native_cerebellum.output.affine_mat,
+    output:
+        nii = bids_anat(space="T1w", desc="Cerebellum", suffix="dseg.nii.gz"),
+    threads: 4
+    resources:
+        mem_mb=16000, time=30
+    log:
+        bids_log(suffix="warp2native_cerebellum.log")
+    container:
+        config["singularity"]["scattr"]
+    shell:
+        """
+        antsApplyTransforms \
+           -i {input.seg} \
+           -r {input.target} \
+           -t {input.warp} -t {input.affine} \
+           -o {output.nii} &> {log}
+        """
+
+rule cp_cerebellum_tsv:
+    """Copy cerebellum atlas TSV into the zona_bb_subcortex BIDS output dir"""
+    input:
+        # repo‐relative path to your source TSV as defined in config.yaml
+        cereb_tsv = str(
+            Path(workflow.basedir).parent
+            / Path(config["cerebellum"]["tsv"])
+        ),
+    output:
+        # drop into the same zona_dir, with desc‑Cerebellum label
+        cereb_tsv = f"{zona_dir}/desc-Cerebellum_dseg.tsv",
+    threads: 1
+    resources:
+        mem_mb = 4000,
+        time   = 10,
+    group:
+        "dseg_tsv"
+    shell:
+        "cp -v {input.cereb_tsv} {output.cereb_tsv}"
+
+
+# =============================================================================================
 
 rule labelmerge:
     input:
@@ -233,23 +329,67 @@ rule labelmerge:
             --cores {threads} --force-output
         """
 
+# =============================== chaining labelmerge ==================================
+rule merge_with_cerebellum:
+    """
+    Merge the zonaBB+FS ‘combined’ atlas (desc‑combined) with the cerebellum atlas
+    via the stand‑alone labelmerge.py script, to produce desc‑combined2.
+
+    Currently calling labelmerge.py directly. TO DO: integrate into labelmerge 
+    snakemake workflow 
+    """
+    input:
+        # the 2‑way merged map and its TSV
+        base_map=lambda wildcards: f"{config['output_dir']}/labelmerge/combined/sub-{wildcards.subject}/sub-{wildcards.subject}_space-T1w_desc-combined_dseg.nii.gz",
+        base_tsv=lambda wildcards: f"{config['output_dir']}/labelmerge/combined/sub-{wildcards.subject}/sub-{wildcards.subject}_space-T1w_desc-combined_dseg.tsv",
+        # the cerebellum map and its TSV
+        overlay_map=lambda wildcards: f"{config['output_dir']}/zona_bb_subcortex/sub-{wildcards.subject}/anat/sub-{wildcards.subject}_space-T1w_desc-Cerebellum_dseg.nii.gz",
+        overlay_tsv=lambda wildcards: f"{config['output_dir']}/zona_bb_subcortex/desc-Cerebellum_dseg.tsv",
+    
+        # base_map    = rules.labelmerge.output.seg,
+        # base_tsv    = rules.labelmerge.output.tsv,
+        # overlay_map = rules.warp2native_cerebellum.output.nii,
+        # overlay_tsv = rules.cp_cerebellum_tsv.output.cereb_tsv,
+    output:
+        seg = bids_labelmerge(
+            space="T1w", desc="combined2", suffix="dseg.nii.gz"
+        ),
+        tsv = bids_labelmerge(
+            space="T1w", desc="combined2", suffix="dseg.tsv"
+        ),
+    threads: 1
+    resources:
+        mem_mb=4000,
+        time=10,
+    shell:
+        """
+        # call the pure‐Python merger directly  
+        python3 {workflow.basedir}/scripts/zona_bb_subcortex/labelmerge.py \
+            {input.base_map}  {input.base_tsv} \
+            {input.overlay_map} {input.overlay_tsv} \
+            {output.seg}      {output.tsv}
+        """
+
+# ===================================================================================
 
 rule get_num_nodes:
     input:
-        seg=bids_labelmerge(
-            space="T1w",
-            datatype="anat" if config.get("skip_labelmerge") else "",
-            desc="combined"
-            if not config.get("skip_labelmerge")
-            else config.get("labelmerge_base_desc"),
-            suffix="dseg.nii.gz",
-        ),
+#        seg=bids_labelmerge(
+#            space="T1w",
+#            datatype="anat" if config.get("skip_labelmerge") else "",
+#            desc="combined"
+#            if not config.get("skip_labelmerge")
+#            else config.get("labelmerge_base_desc"),
+#            suffix="dseg.nii.gz",
+#        ),
+        seg = rules.merge_with_cerebellum.output.seg,
     output:
         num_labels=temp(
             bids_labelmerge(
                 space="T1w",
                 datatype="anat" if config.get("skip_labelmerge") else "",
-                desc="combined"
+#                desc="combined"
+                desc="combined2"
                 if not config.get("skip_labelmerge")
                 else config.get("labelmerge_base_desc"),
                 suffix="numNodes.txt",
@@ -273,7 +413,7 @@ rule binarize:
     output:
         mask=bids_labelmerge(
             space="T1w",
-            desc="combined"
+            desc="combined2"
             if not config.get("skip_labelmerge")
             else config.get("labelmerge_base_desc"),
             suffix="mask.nii.gz",
