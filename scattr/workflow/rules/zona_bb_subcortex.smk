@@ -189,6 +189,8 @@ rule reg2native_cerebellum:
         mem_mb=16000, time=60
     log:
         bids_log(suffix="reg2native_cerebellum.log")
+    group:
+        "subcortical_1"
     container:
         config["singularity"]["scattr"]
     shell:
@@ -215,6 +217,8 @@ rule warp2native_cerebellum:
         mem_mb=16000, time=30
     log:
         bids_log(suffix="warp2native_cerebellum.log")
+    group:
+        "subcortical_1"
     container:
         config["singularity"]["scattr"]
     shell:
@@ -252,12 +256,12 @@ rule cp_cerebellum_tsv:
 rule labelmerge:
     input:
         zona_seg=inputs_t1w["T1w"].expand(
-            rules.warp2native.output.nii, allow_missing=True
+            rules.warp2native.output.nii, allow_missing=False
         )
         if not config.get("labelmerge_base_dir")
         else [],
         fs_seg=inputs_t1w["T1w"].expand(
-            rules.fs_xfm_to_native.output.thal, allow_missing=True
+            rules.fs_xfm_to_native.output.thal, allow_missing=False
         )
         if not config.get("labelmerge_overlay_dir")
         else [],
@@ -295,10 +299,12 @@ rule labelmerge:
             if config.get("labelmerge_overlay_exceptions")
             else ""
         ),
+        output_desc="combined",
     output:
         seg=inputs_t1w["T1w"].expand(
             bids_labelmerge(
                 space="T1w",
+                datatype="anat",
                 desc="combined",
                 suffix="dseg.nii.gz",
             ),
@@ -307,6 +313,7 @@ rule labelmerge:
         tsv=inputs_t1w["T1w"].expand(
             bids_labelmerge(
                 space="T1w",
+                datatype="anat",
                 desc="combined",
                 suffix="dseg.tsv",
             ),
@@ -317,8 +324,8 @@ rule labelmerge:
         time=60,
     group:
         "subcortical_group"
-    container:
-        config["singularity"]["scattr"]
+    # container:
+    #     config["singularity"]["scattr"]
     shell:
         """
         labelmerge {params.labelmerge_base_dir} {params.labelmerge_out_dir} \\
@@ -326,7 +333,8 @@ rule labelmerge:
             {params.base_desc} {params.base_drops} {params.base_exceptions} \\
             {params.overlay_dir} {params.overlay_desc} \\
             {params.overlay_drops} {params.overlay_exceptions} \\
-            --cores {threads} --force-output
+            --output_desc {params.output_desc} \\
+            --cores {threads} --forceall
         """
 
 # =============================== chaining labelmerge ==================================
@@ -334,41 +342,105 @@ rule merge_with_cerebellum:
     """
     Merge the zonaBB+FS ‘combined’ atlas (desc‑combined) with the cerebellum atlas
     via the stand‑alone labelmerge.py script, to produce desc‑combined2.
-
-    Currently calling labelmerge.py directly. TO DO: integrate into labelmerge 
-    snakemake workflow 
     """
     input:
-        # the 2‑way merged map and its TSV
-        base_map=lambda wildcards: f"{config['output_dir']}/labelmerge/combined/sub-{wildcards.subject}/sub-{wildcards.subject}_space-T1w_desc-combined_dseg.nii.gz",
-        base_tsv=lambda wildcards: f"{config['output_dir']}/labelmerge/combined/sub-{wildcards.subject}/sub-{wildcards.subject}_space-T1w_desc-combined_dseg.tsv",
-        # the cerebellum map and its TSV
-        overlay_map=lambda wildcards: f"{config['output_dir']}/zona_bb_subcortex/sub-{wildcards.subject}/anat/sub-{wildcards.subject}_space-T1w_desc-Cerebellum_dseg.nii.gz",
-        overlay_tsv=lambda wildcards: f"{config['output_dir']}/zona_bb_subcortex/desc-Cerebellum_dseg.tsv",
-    
-        # base_map    = rules.labelmerge.output.seg,
-        # base_tsv    = rules.labelmerge.output.tsv,
-        # overlay_map = rules.warp2native_cerebellum.output.nii,
-        # overlay_tsv = rules.cp_cerebellum_tsv.output.cereb_tsv,
+        base_seg=inputs_t1w["T1w"].expand(
+            rules.labelmerge.output.seg, allow_missing=False
+        ),
+        cereb_seg=inputs_t1w["T1w"].expand(
+            rules.warp2native_cerebellum.output.nii, allow_missing=False
+        ),
+        base_tsv=inputs_t1w["T1w"].expand(
+            bids_labelmerge(
+                space="T1w",
+                datatype='anat',
+                desc="combined",
+                suffix="dseg.tsv",
+            ),
+        ),
+        cereb_tsv=rules.cp_cerebellum_tsv.output.cereb_tsv,
+    params:
+        base_dir=directory(labelmerge_dir),
+        cereb_out_dir=directory(labelmerge_dir),
+        base_desc="combined",
+        overlay_dir=directory(zona_dir),
+        overlay_desc="Cerebellum",
+        output_desc="combined2",
     output:
-        seg = bids_labelmerge(
-            space="T1w", desc="combined2", suffix="dseg.nii.gz"
+        seg=inputs_t1w["T1w"].expand(
+            bids_labelmerge(
+                space="T1w",
+                datatype="anat",
+                desc="combined2",
+                suffix="dseg.nii.gz",
+            ),
+            allow_missing=False,
         ),
-        tsv = bids_labelmerge(
-            space="T1w", desc="combined2", suffix="dseg.tsv"
+        tsv=inputs_t1w["T1w"].expand(
+            bids_labelmerge(
+                space="T1w",
+                datatype="anat",
+                desc="combined2",
+                suffix="dseg.tsv",
+            ),
+            allow_missing=False,
         ),
-    threads: 1
     resources:
-        mem_mb=4000,
-        time=10,
+        mem_mb=16000,
+        time=60,
+    group:
+        "subcortical_group"
+    # container:
+    #     config["singularity"]["scattr"]
     shell:
         """
-        # call the pure‐Python merger directly  
-        python3 {workflow.basedir}/scripts/zona_bb_subcortex/labelmerge.py \
-            {input.base_map}  {input.base_tsv} \
-            {input.overlay_map} {input.overlay_tsv} \
-            {output.seg}      {output.tsv}
+        labelmerge {params.base_dir} {params.cereb_out_dir} \\
+            participant \\
+            --base-desc {params.base_desc} \\
+            --overlay-bids-dir {params.overlay_dir} --overlay_desc {params.overlay_desc} \\
+            --output_desc {params.output_desc} \\
+            --cores {threads} --forceall
         """
+
+# rule merge_with_cerebellum:
+#     """
+#     Merge the zonaBB+FS ‘combined’ atlas (desc‑combined) with the cerebellum atlas
+#     via the stand‑alone labelmerge.py script, to produce desc‑combined2.
+
+#     Currently calling labelmerge.py directly. TO DO: integrate into labelmerge 
+#     snakemake workflow 
+#     """
+#     input:
+
+#         #base_map=rules.labelmerge.output.seg,
+#         #base_tsv=rules.labelmerge.output.tsv,
+#         #overlay_map = rules.warp2native_cerebellum.output.nii,
+#         #overlay_tsv = rules.cp_cerebellum_tsv.output.cereb_tsv,
+        
+#         # base_map=lambda wildcards: f"{config['output_dir']}/labelmerge/combined/sub-{wildcards.subject}/sub-{wildcards.subject}_space-T1w_desc-combined_dseg.nii.gz",
+#         # base_tsv=lambda wildcards: f"{config['output_dir']}/labelmerge/combined/sub-{wildcards.subject}/sub-{wildcards.subject}_space-T1w_desc-combined_dseg.tsv",
+#         # overlay_map=lambda wildcards: f"{config['output_dir']}/zona_bb_subcortex/sub-{wildcards.subject}/anat/sub-{wildcards.subject}_space-T1w_desc-Cerebellum_dseg.nii.gz",
+#         # overlay_tsv=lambda wildcards: f"{config['output_dir']}/zona_bb_subcortex/desc-Cerebellum_dseg.tsv",
+    
+#     output:
+#         seg = bids_labelmerge(
+#             space="T1w", desc="combined2", suffix="dseg.nii.gz"
+#         ),
+#         tsv = bids_labelmerge(
+#             space="T1w", desc="combined2", suffix="dseg.tsv"
+#         ),
+#     threads: 1
+#     resources:
+#         mem_mb=4000,
+#         time=10,
+#     shell:
+#         """
+#         # call the pure‐Python merger directly  
+#         python3 {workflow.basedir}/scripts/zona_bb_subcortex/labelmerge.py \
+#             {input.base_map}  {input.base_tsv} \
+#             {input.overlay_map} {input.overlay_tsv} \
+#             {output.seg}      {output.tsv}
+#         """
 
 # ===================================================================================
 

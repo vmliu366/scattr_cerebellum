@@ -282,3 +282,6 @@ singularity:
   scattr: "/home/mliu366/scratch/1_in_progress/workflows/scattr_latest.sif"
 
 fs_license: /home/mliu366/projects/def-akhanf-ab/shared/.license
+
+# tckgen specific 
+num_chunks: 10
