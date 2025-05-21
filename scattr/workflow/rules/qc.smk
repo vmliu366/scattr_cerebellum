@@ -20,7 +20,7 @@ rule segment_qc:
     input:
         qc_labels=bids_labelmerge(
             space="T1w",
-            datatype=None if not config.get("skip_labelmerge") else "anat",
+            datatype="anat",
             desc="combined2"
             if not config.get("skip_labelmerge")
             else config.get("labelmerge_base_desc"),
@@ -55,6 +55,7 @@ rule segment_qc:
     resources:
         mem_mb=16000,
         time=15,
+        threads=4,
     group:
         "qc"
     container:
@@ -93,6 +94,7 @@ rule registration_qc:
     resources:
         mem_mb=16000,
         time=15,
+        threads=4,
     group:
         "qc"
     container:

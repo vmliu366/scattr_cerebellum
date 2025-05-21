@@ -88,6 +88,7 @@ rule dwi2tensor:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="dwi2tensor.log"),
     group:

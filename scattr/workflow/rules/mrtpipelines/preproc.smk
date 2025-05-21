@@ -22,6 +22,7 @@ rule nii2mif:
     resources:
         mem_mb=16000,
         time=10,
+        threads=4,
     log:
         bids_log(suffix="nii2mif.log", **inputs_dwi.subj_wildcards),
     group:
@@ -70,6 +71,7 @@ rule dwi2response:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="dwi2response.log"),
     group:
@@ -128,6 +130,7 @@ rule responsemean:
     resources:
         mem_mb=16000,
         time=10,
+        threads=4,
     log:
         f"{log_dir}/{{tissue}}_responsemean.log",
     group:
@@ -202,6 +205,7 @@ rule dwi2fod:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="dwi2fod.log"),
     group:
@@ -257,6 +261,7 @@ rule mtnormalise:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="mtnormalise.log"),
     group:
@@ -292,6 +297,7 @@ rule dwinormalise:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="dwinormalise.log"),
     container:

@@ -34,8 +34,9 @@ rule tckgen:
             suffix="tractography.tck",
             **wildcards,
         ),
-        mem_mb=128000,
-        time=60 * 24,
+        mem_mb=64000,
+        time=60 * 10,
+        threads=32,
     log:
         bids_log(suffix="tckgen.log"),
     container:
@@ -72,6 +73,7 @@ rule tcksift2:
     resources:
         mem_mb=32000,
         time=60 * 2,
+        threads=8,
     log:
         bids_log(suffix="tcksift2.log"),
     container:
@@ -96,6 +98,7 @@ checkpoint create_roi_mask:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     group:
         "tract_masks"
     container:
@@ -154,10 +157,11 @@ checkpoint create_exclude_mask:
         subj_wildcards=inputs_dwi.subj_wildcards,
     output:
         out_dir=directory(bids_anat_out(datatype="exclude_mask")),
-    threads: 4
+    threads: 36
     resources:
-        mem_mb=16000,
+        mem_mb=64000,
         time=60 * 3,
+        threads=36,
     group:
         "tract_masks"
     container:
@@ -216,6 +220,7 @@ rule tck2connectome:
     resources:
         mem_mb=128000,
         time=60 * 3,
+        threads=32,
     log:
         bids_log(suffix="tck2connectome.log"),
     group:
@@ -285,6 +290,7 @@ checkpoint connectome2tck:
         ),
         mem_mb=128000,
         time=60 * 3,
+        threads=32,
     log:
         bids_log(suffix="connectome2tck.log"),
     group:

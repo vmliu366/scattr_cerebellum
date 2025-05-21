@@ -237,6 +237,7 @@ rule filtered_tck2connectome:
         ),
         mem_mb=128000,
         time=60 * 3,
+        threads=32,
     log:
         bids_log(desc="filtered", suffix="tck2connectome"),
     group:

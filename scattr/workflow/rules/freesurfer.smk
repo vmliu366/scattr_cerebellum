@@ -86,6 +86,7 @@ rule thalamic_segmentation:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="thalamicSegmentation.log"),
     group:
@@ -139,6 +140,7 @@ rule mgz2nii:
     resources:
         mem_mb=16000,
         time=10,
+        threads=4,
     log:
         bids_log(suffix="mgz2nii.log"),
     group:
@@ -178,6 +180,7 @@ rule fs_xfm_to_native:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="fsXfmToNative.log"),
     group:

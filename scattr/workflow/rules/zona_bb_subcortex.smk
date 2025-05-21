@@ -96,6 +96,7 @@ rule reg2native:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="reg2native.log"),
     group:
@@ -137,6 +138,7 @@ rule warp2native:
     resources:
         mem_mb=16000,
         time=30,
+        threads=4,
     log:
         bids_log(suffix="warp2native.log"),
     group:
@@ -186,7 +188,7 @@ rule reg2native_cerebellum:
         affine_mat = bids_anat(desc="fromCerebellumToNative", suffix="0GenericAffine.mat"),
     threads:    4
     resources:
-        mem_mb=16000, time=60
+        mem_mb=16000, time=60, threads=4,
     log:
         bids_log(suffix="reg2native_cerebellum.log")
     group:
@@ -214,7 +216,7 @@ rule warp2native_cerebellum:
         nii = bids_anat(space="T1w", desc="Cerebellum", suffix="dseg.nii.gz"),
     threads: 4
     resources:
-        mem_mb=16000, time=30
+        mem_mb=16000, time=30, threads=4,
     log:
         bids_log(suffix="warp2native_cerebellum.log")
     group:
@@ -245,6 +247,7 @@ rule cp_cerebellum_tsv:
     resources:
         mem_mb = 4000,
         time   = 10,
+        threads=4,
     group:
         "dseg_tsv"
     shell:
@@ -446,18 +449,18 @@ rule merge_with_cerebellum:
 
 rule get_num_nodes:
     input:
-#        seg=bids_labelmerge(
-#            space="T1w",
-#            datatype="anat" if config.get("skip_labelmerge") else "",
-#            desc="combined"
-#            if not config.get("skip_labelmerge")
-#            else config.get("labelmerge_base_desc"),
-#            suffix="dseg.nii.gz",
-#        ),
-        seg = rules.merge_with_cerebellum.output.seg,
+       seg=bids_labelmerge(
+           space="T1w",
+        #    datatype="anat" if config.get("skip_labelmerge") else "",
+           datatype="anat",
+           desc="combined2"
+           if not config.get("skip_labelmerge")
+           else config.get("labelmerge_base_desc"),
+           suffix="dseg.nii.gz",
+       ),
+        # seg = rules.merge_with_cerebellum.output.seg,
     output:
-        num_labels=temp(
-            bids_labelmerge(
+        num_labels=bids_labelmerge(
                 space="T1w",
                 datatype="anat" if config.get("skip_labelmerge") else "",
 #                desc="combined"
@@ -465,12 +468,12 @@ rule get_num_nodes:
                 if not config.get("skip_labelmerge")
                 else config.get("labelmerge_base_desc"),
                 suffix="numNodes.txt",
-            )
-        ),
+            ),
     threads: 4
     resources:
         mem_mb=16000,
         time=10,
+        threads=4,
     group:
         "subcortical_2"
     container:
@@ -494,6 +497,7 @@ rule binarize:
     resources:
         mem_mb=16000,
         time=10,
+        threads=4,
     log:
         bids_log(suffix="binarize.log"),
     group:
@@ -520,6 +524,7 @@ rule add_brainstem:
     resources:
         mem_mb=16000,
         time=10,
+        threads=4,
     log:
         bids_log(suffix="addBrainstem.log"),
     group:
@@ -545,6 +550,7 @@ rule create_convex_hull:
     resources:
         mem_mb=16000,
         time=60,
+        threads=4,
     log:
         bids_log(suffix="createConvexHull.log"),
     group:
