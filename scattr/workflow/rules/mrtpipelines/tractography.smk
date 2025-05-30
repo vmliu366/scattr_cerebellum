@@ -24,7 +24,7 @@ rule tckgen:
             desc="iFOD2",
             suffix="tractography.tck",
         ),
-    threads: 32
+    threads: 16
     resources:
         tmp_tck=lambda wildcards: bids_tractography_out(
             root=os.environ.get("SLURM_TMPDIR")
@@ -36,7 +36,7 @@ rule tckgen:
         ),
         mem_mb=64000,
         time=60 * 10,
-        threads=32,
+        threads=16,
     log:
         bids_log(suffix="tckgen.log"),
     container:
@@ -157,11 +157,11 @@ checkpoint create_exclude_mask:
         subj_wildcards=inputs_dwi.subj_wildcards,
     output:
         out_dir=directory(bids_anat_out(datatype="exclude_mask")),
-    threads: 36
+    threads: 16
     resources:
         mem_mb=64000,
-        time=60 * 3,
-        threads=36,
+        time=60 * 2,
+        threads=16,
     group:
         "tract_masks"
     container:
@@ -216,11 +216,11 @@ rule tck2connectome:
             desc="subcortical",
             suffix="nodeWeights.csv",
         ),
-    threads: 32
+    threads: 16
     resources:
-        mem_mb=128000,
+        mem_mb=64000,
         time=60 * 3,
-        threads=32,
+        threads=16,
     log:
         bids_log(suffix="tck2connectome.log"),
     group:
@@ -268,7 +268,7 @@ checkpoint connectome2tck:
             datatype="unfiltered",
             **wildcards,
         ),
-    threads: 32
+    threads: 16
     resources:
         edge_weight_prefix=lambda wildcards: bids_tractography_out(
             root=os.environ.get("SLURM_TMPDIR")
@@ -288,9 +288,9 @@ checkpoint connectome2tck:
             suffix="from",
             **wildcards,
         ),
-        mem_mb=128000,
+        mem_mb=64000,
         time=60 * 3,
-        threads=32,
+        threads=16,
     log:
         bids_log(suffix="connectome2tck.log"),
     group:

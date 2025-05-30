@@ -247,7 +247,7 @@ rule cp_cerebellum_tsv:
     resources:
         mem_mb = 4000,
         time   = 10,
-        threads=4,
+        threads=1,
     group:
         "dseg_tsv"
     shell:
@@ -327,8 +327,6 @@ rule labelmerge:
         time=60,
     group:
         "subcortical_group"
-    # container:
-    #     config["singularity"]["scattr"]
     shell:
         """
         labelmerge {params.labelmerge_base_dir} {params.labelmerge_out_dir} \\
@@ -337,7 +335,7 @@ rule labelmerge:
             {params.overlay_dir} {params.overlay_desc} \\
             {params.overlay_drops} {params.overlay_exceptions} \\
             --output_desc {params.output_desc} \\
-            --cores {threads} --forceall
+            --cores {threads} --force-output
         """
 
 # =============================== chaining labelmerge ==================================
@@ -392,9 +390,7 @@ rule merge_with_cerebellum:
         mem_mb=16000,
         time=60,
     group:
-        "subcortical_group"
-    # container:
-    #     config["singularity"]["scattr"]
+        "subcortical_group_1"
     shell:
         """
         labelmerge {params.base_dir} {params.cereb_out_dir} \\
@@ -488,6 +484,7 @@ rule binarize:
     output:
         mask=bids_labelmerge(
             space="T1w",
+            datatype="anat",
             desc="combined2"
             if not config.get("skip_labelmerge")
             else config.get("labelmerge_base_desc"),
